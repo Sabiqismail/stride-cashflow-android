@@ -9,13 +9,13 @@ plugins {
 
 android {
     namespace = "com.stride.cashflow"
-    // --- FIX 1: 'compileSdk' is a simple assignment ---
+    // FIX 1: 'compileSdk' is a simple assignment
     compileSdk = 34 // Use a stable SDK version like 34
 
     defaultConfig {
         applicationId = "com.stride.cashflow"
         minSdk = 24
-        targetSdk = 34 // Match compileSdk
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
@@ -35,12 +35,12 @@ android {
         }
     }
     compileOptions {
-        // --- FIX 2: Update Java version to match your JDK (21) ---
+        // FIX 2: Update Java version to match your JDK (21)
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
     kotlinOptions {
-        // --- FIX 3: Update Kotlin's JVM target ---
+        // FIX 3: Update Kotlin's JVM target
         jvmTarget = "21"
     }
     buildFeatures {
@@ -58,7 +58,6 @@ android {
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -75,7 +74,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
-    // --- FIX 4: Use the version catalog for these dependencies too ---
+    // FIX 4: Use the version catalog for these dependencies too
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.room.runtime)

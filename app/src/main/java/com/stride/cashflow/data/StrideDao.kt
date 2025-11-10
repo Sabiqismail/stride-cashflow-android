@@ -18,6 +18,9 @@ interface StrideDao {
     @Query("SELECT * FROM item_templates ORDER BY category, name ASC")
     fun getAllItemTemplates(): Flow<List<ItemTemplate>>
 
+    @Query("SELECT * FROM planner_entries")
+    fun getAllEntries(): Flow<List<PlannerEntry>> // This is now a correct abstract function
+
     // --- NEW FUNCTIONS FOR PLANNER ENTRIES ---
 
     // Get all entries for a specific month (e.g., "2025-11")
@@ -37,5 +40,6 @@ interface StrideDao {
     // This function will be used to create a new planner. It inserts a list
     // of new, empty entries for a given month.
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAllEntries(entries: List<PlannerEntry>)
+    suspend fun insertAllEntries(entries: List<PlannerEntry>) // <-- ADD THIS LINE BACK
+
 }

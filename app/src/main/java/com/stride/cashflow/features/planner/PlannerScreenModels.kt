@@ -6,6 +6,6 @@ data class UiPlannerItem(
     val templateId: Int,
     val name: String,
     val category: String,
-    val amount: Double,
+    val amount: Long,
     val isDone: Boolean
 )

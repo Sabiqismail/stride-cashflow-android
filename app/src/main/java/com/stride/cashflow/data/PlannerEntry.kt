@@ -9,7 +9,7 @@ data class PlannerEntry(
     val id: Int = 0,
     val plannerMonth: String, // Format: "YYYY-MM", e.g., "2025-11"
     val templateId: Int,      // This links to ItemTemplate's id
-    val amount: Double = 0.0,
+    val amount: Long = 0L,
     val isDone: Boolean = false
 )
     

@@ -24,25 +24,15 @@ class StrideRepository(private val strideDao: StrideDao) {
         strideDao.upsertEntry(entry)
     }
 
-    suspend fun createPlannerForMonth(month: String) {
-        // Get all existing templates
-        val templates = strideDao.getAllItemTemplates().first() // .first() gets the current list once
-
-        // Create a new list of PlannerEntry objects, one for each template,
-        // with default values for the given month.
-        val newEntries = templates.map { template ->
-            PlannerEntry(
-                plannerMonth = month,
-                templateId = template.id,
-                amount = 0.0,
-                isDone = false
-            )
+    suspend fun createPlannerForMonth(entriesToSave: List<PlannerEntry>) {
+        // Insert all the new entries that the user actually filled out.
+        if (entriesToSave.isNotEmpty()) {
+            strideDao.insertAllEntries(entriesToSave)
         }
+    }
 
-        // Insert all these new entries into the database
-        if (newEntries.isNotEmpty()) {
-            strideDao.insertAllEntries(newEntries)
-        }
+    fun getAllEntries(): Flow<List<PlannerEntry>> {
+        return strideDao.getAllEntries()
     }
 
     // We need this function to check if a planner for a month already exists.

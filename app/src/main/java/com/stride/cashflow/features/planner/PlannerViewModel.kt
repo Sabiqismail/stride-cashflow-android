@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+
 // Define inflow categories as per your design
 val INFLOW_CATEGORIES = listOf("Income", "Receivables")
 
@@ -29,9 +30,9 @@ class PlannerViewModel(
         repository.getEntriesForMonth(month)
     ) { templates, entries ->
         val uiPlannerItems = templates.map { template ->
-            // Find the corresponding entry for this template, or create a default one
+            // Find the corresponding entry for this template, or create a default one with 0L
             val entry = entries.find { it.templateId == template.id }
-                ?: PlannerEntry(templateId = template.id, plannerMonth = month)
+                ?: PlannerEntry(templateId = template.id, plannerMonth = month, amount = 0L)
 
             UiPlannerItem(
                 entryId = entry.id,
@@ -43,14 +44,16 @@ class PlannerViewModel(
             )
         }
 
-        // Calculate totals
+        // Calculate totals using Long
         val totalInflows = uiPlannerItems
             .filter { it.category in INFLOW_CATEGORIES }
-            .sumOf { it.amount }
+            .sumOf { it.amount } // sumOf works directly with Long in recent Kotlin versions
 
         val totalOutflows = uiPlannerItems
             .filterNot { it.category in INFLOW_CATEGORIES }
             .sumOf { it.amount }
+
+
 
         PlannerUiState(
             plannerItems = uiPlannerItems,
@@ -64,14 +67,15 @@ class PlannerViewModel(
         initialValue = PlannerUiState() // Start with an empty state
     )
 
-    fun updateAmount(templateId: Int, newAmount: Double) {
+    fun updateAmount(templateId: Int, newAmount: Long) { // Updated parameter to Long
         viewModelScope.launch {
+            val currentItem = uiState.value.plannerItems.find { it.templateId == templateId }
             val entry = PlannerEntry(
-                id = uiState.value.plannerItems.find { it.templateId == templateId }?.entryId ?: 0,
+                id = currentItem?.entryId ?: 0,
                 plannerMonth = month,
                 templateId = templateId,
-                amount = newAmount,
-                isDone = uiState.value.plannerItems.find { it.templateId == templateId }?.isDone ?: false
+                amount = newAmount, // Amount is now a Long
+                isDone = currentItem?.isDone ?: false
             )
             repository.upsertEntry(entry)
         }
@@ -89,14 +93,34 @@ class PlannerViewModel(
             repository.upsertEntry(updatedEntry)
         }
     }
+
+    fun saveNewPlanner() {
+        viewModelScope.launch {
+            // Filter out any items where the user did not enter an amount
+            val entriesToSave = uiState.value.plannerItems
+                .filter { it.amount > 0L }
+                .map { uiItem ->
+                    PlannerEntry(
+                        id = 0, // Always a new entry, so id is 0
+                        plannerMonth = month,
+                        templateId = uiItem.templateId,
+                        amount = uiItem.amount,
+                        isDone = uiItem.isDone
+                    )
+                }
+
+            // Call the repository to save these new entries
+            repository.createPlannerForMonth(entriesToSave)
+        }
+    }
 }
 
-// Data class to hold the entire screen state
+// Data class to hold the entire screen state, now using Long
 data class PlannerUiState(
     val plannerItems: List<UiPlannerItem> = emptyList(),
-    val totalInflows: Double = 0.0,
-    val totalOutflows: Double = 0.0,
-    val netBalance: Double = 0.0
+    val totalInflows: Long = 0L,
+    val totalOutflows: Long = 0L,
+    val netBalance: Long = 0L
 )
 
 // Factory for creating the PlannerViewModel
