@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- 1. Define your main app theme properly. It inherits from your Compose theme's parent. -->
+    <style name="Theme.StrideCashflow" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- Set the background color -->
+        <item name="windowSplashScreenBackground">@color/off_white</item>
+        <!-- Set the icon to your logo file. This is the crucial part. -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/stride_logo</item>
+        <!-- Set the theme to use after the splash screen is gone -->
+        <item name="postSplashScreenTheme">@style/Theme.StrideCashflow</item>
+    </style>
+
+
+
+
+    <!-- 2. The Starting theme inherits from SplashScreen, NOT your main app theme. -->
+    <!-- <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!- Set the background color -->
+        </resources>
