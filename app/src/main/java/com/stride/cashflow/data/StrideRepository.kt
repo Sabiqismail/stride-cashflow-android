@@ -31,6 +31,13 @@ class StrideRepository(private val strideDao: StrideDao) {
         }
     }
 
+    // In data/StrideRepository.kt, add this function inside the class
+
+    suspend fun deleteTemplate(templateId: Int) {
+        strideDao.deleteTemplateById(templateId)
+    }
+
+
     // In data/StrideRepository.kt, add this function anywhere inside the class
 
     suspend fun deletePlannerForMonth(month: String) {

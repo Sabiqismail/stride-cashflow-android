@@ -12,6 +12,12 @@ interface StrideDao {
 
     // --- Functions for Item Templates ---
 
+    // In data/StrideDao.kt, add this function inside the interface
+
+    @Query("DELETE FROM item_templates WHERE id = :templateId")
+    suspend fun deleteTemplateById(templateId: Int)
+
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertItemTemplate(template: ItemTemplate)
 

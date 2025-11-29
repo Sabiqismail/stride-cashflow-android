@@ -23,17 +23,12 @@ import com.stride.cashflow.features.planner.PlannerViewModel
 import com.stride.cashflow.ui.theme.StrideCashflowTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
-// --- UNIFIED VIEWMODEL FACTORY ---
 object AppViewModelFactory : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(
-        modelClass: Class<T>,
-        extras: CreationExtras
-    ): T {
+    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
         val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
         val repository = (application as StrideApplication).repository
         val savedStateHandle = extras.createSavedStateHandle()
-
         return when (modelClass) {
             ManageItemsViewModel::class.java -> ManageItemsViewModel(repository) as T
             DashboardViewModel::class.java -> DashboardViewModel(repository) as T
@@ -43,15 +38,13 @@ object AppViewModelFactory : ViewModelProvider.Factory {
     }
 }
 
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         installSplashScreen()
         setContent {
             StrideCashflowTheme {
-                StrideApp(factory = AppViewModelFactory
-                )
+                StrideApp(factory = AppViewModelFactory)
             }
         }
     }
@@ -65,11 +58,10 @@ fun StrideApp(factory: ViewModelProvider.Factory) {
 
         composable("dashboard") {
             val dashboardViewModel: DashboardViewModel = viewModel(factory = factory)
-            DashboardScreen(viewModel = dashboardViewModel,
+            DashboardScreen(
+                viewModel = dashboardViewModel,
                 onNavigateToManageItems = { navController.navigate("manage_items") },
-                onNavigateToPlanner = { route ->
-                    navController.navigate(route)
-                }
+                onNavigateToPlanner = { route -> navController.navigate(route) }
             )
         }
 
@@ -78,41 +70,42 @@ fun StrideApp(factory: ViewModelProvider.Factory) {
             ManageItemsScreen(viewModel = manageItemsViewModel)
         }
 
-        // --- THE "EDIT PLANNER" ROUTE ---
+        // --- THE "VIEW" ROUTE for a saved planner ---
         composable(
-            route = "planner/{month}",
+            route = "planner/{month}", // The simple route for viewing
             arguments = listOf(navArgument("month") { type = NavType.StringType })
         ) {
             val plannerViewModel: PlannerViewModel = viewModel(factory = factory)
             val month = it.arguments?.getString("month") ?: "Error"
             PlannerScreen(
-                isCreateMode = false, // This is EDIT mode
+                isCreateMode = false, // This is VIEW mode, so create mode is false
                 month = month,
                 viewModel = plannerViewModel,
                 onNavigateBack = { navController.popBackStack() },
-                onSaveComplete = { /* Not used in edit mode */ },
+                onSaveComplete = { /* Not used */ },
                 onNavigateToEdit = { route -> navController.navigate(route) }
-            )}
+            )
+        }
 
-        // --- THE "CREATE PLANNER" ROUTE ---
+        // --- THE "CREATE / EDIT" ROUTE ---
         composable(
-            route = "planner/create/{month}",
-            arguments = listOf(navArgument("month") { type = NavType.StringType })
+            // We add an optional argument to the route to distinguish create/edit from view
+            route = "planner/create/{month}?isCreate={isCreate}",
+            arguments = listOf(
+                navArgument("month") { type = NavType.StringType },
+                navArgument("isCreate") { defaultValue = "true" } // Default to create mode
+            )
         ) {
             val plannerViewModel: PlannerViewModel = viewModel(factory = factory)
             val month = it.arguments?.getString("month") ?: "Error"
             PlannerScreen(
-                isCreateMode = true, // This is CREATE mode
+                isCreateMode = true, // The UI should always be in "create" mode here
                 month = month,
                 viewModel = plannerViewModel,
                 onNavigateBack = { navController.popBackStack() },
-                onSaveComplete = {
-                    // After saving, pop back to the dashboard
-                    navController.popBackStack()
-                },
-                onNavigateToEdit = { /* Not used in create mode */ }
+                onSaveComplete = { navController.popBackStack() },
+                onNavigateToEdit = { /* Not used */ }
             )
         }
     }
 }
-

@@ -21,6 +21,14 @@ class ManageItemsViewModel(private val repository: StrideRepository) : ViewModel
             initialValue = emptyList()
         )
 
+    // In features/manage_items/ManageItemsViewModel.kt, add this inside the class
+
+    fun deleteFlow(templateId: Int) {
+        viewModelScope.launch {
+            repository.deleteTemplate(templateId)
+        }
+    }
+
     fun addItem(name: String, category: String) {
         // Don't add if the name is blank
         if (name.isNotBlank()) {
