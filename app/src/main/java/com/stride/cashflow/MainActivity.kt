@@ -23,22 +23,17 @@ import com.stride.cashflow.features.planner.PlannerViewModel
 import com.stride.cashflow.ui.theme.StrideCashflowTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
-// --- NEW UNIFIED VIEWMODEL FACTORY ---
-// This single factory can create ALL our ViewModels
+// --- UNIFIED VIEWMODEL FACTORY ---
 object AppViewModelFactory : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(
         modelClass: Class<T>,
         extras: CreationExtras
     ): T {
-        // Get the repository from the application context via extras
         val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
         val repository = (application as StrideApplication).repository
-
-        // Get the SavedStateHandle, which is needed for PlannerViewModel
         val savedStateHandle = extras.createSavedStateHandle()
 
-        // Decide which ViewModel to create based on the class requested
         return when (modelClass) {
             ManageItemsViewModel::class.java -> ManageItemsViewModel(repository) as T
             DashboardViewModel::class.java -> DashboardViewModel(repository) as T
@@ -55,8 +50,8 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         setContent {
             StrideCashflowTheme {
-                // We pass our single, unified factory to the app
-                StrideApp(factory = AppViewModelFactory)
+                StrideApp(factory = AppViewModelFactory
+                )
             }
         }
     }
@@ -70,10 +65,9 @@ fun StrideApp(factory: ViewModelProvider.Factory) {
 
         composable("dashboard") {
             val dashboardViewModel: DashboardViewModel = viewModel(factory = factory)
-            DashboardScreen(
-                viewModel = dashboardViewModel,
+            DashboardScreen(viewModel = dashboardViewModel,
                 onNavigateToManageItems = { navController.navigate("manage_items") },
-                onNavigateToPlanner = { route -> // <-- This "route" is now "planner/create/2025-11" or "planner/2025-11"
+                onNavigateToPlanner = { route ->
                     navController.navigate(route)
                 }
             )
@@ -84,7 +78,7 @@ fun StrideApp(factory: ViewModelProvider.Factory) {
             ManageItemsScreen(viewModel = manageItemsViewModel)
         }
 
-        // The "Edit Planner" route
+        // --- THE "EDIT PLANNER" ROUTE ---
         composable(
             route = "planner/{month}",
             arguments = listOf(navArgument("month") { type = NavType.StringType })
@@ -96,13 +90,13 @@ fun StrideApp(factory: ViewModelProvider.Factory) {
                 month = month,
                 viewModel = plannerViewModel,
                 onNavigateBack = { navController.popBackStack() },
-                onSaveComplete = {} // Not used in edit mode
-            )
-        }
+                onSaveComplete = { /* Not used in edit mode */ },
+                onNavigateToEdit = { route -> navController.navigate(route) }
+            )}
 
-        // --- THE NEW "CREATE PLANNER" ROUTE ---
+        // --- THE "CREATE PLANNER" ROUTE ---
         composable(
-            route = "planner/create/{month}", // New route for creating
+            route = "planner/create/{month}",
             arguments = listOf(navArgument("month") { type = NavType.StringType })
         ) {
             val plannerViewModel: PlannerViewModel = viewModel(factory = factory)
@@ -115,8 +109,10 @@ fun StrideApp(factory: ViewModelProvider.Factory) {
                 onSaveComplete = {
                     // After saving, pop back to the dashboard
                     navController.popBackStack()
-                }
+                },
+                onNavigateToEdit = { /* Not used in create mode */ }
             )
         }
     }
 }
+

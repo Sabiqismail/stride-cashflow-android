@@ -15,6 +15,12 @@ interface StrideDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertItemTemplate(template: ItemTemplate)
 
+    // In data/StrideDao.kt, add this function anywhere inside the interface
+
+    @Query("DELETE FROM planner_entries WHERE plannerMonth = :month")
+    suspend fun deleteEntriesForMonth(month: String)
+
+
     @Query("SELECT * FROM item_templates ORDER BY category, name ASC")
     fun getAllItemTemplates(): Flow<List<ItemTemplate>>
 

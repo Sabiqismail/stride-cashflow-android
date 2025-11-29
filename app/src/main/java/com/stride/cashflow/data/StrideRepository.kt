@@ -31,6 +31,13 @@ class StrideRepository(private val strideDao: StrideDao) {
         }
     }
 
+    // In data/StrideRepository.kt, add this function anywhere inside the class
+
+    suspend fun deletePlannerForMonth(month: String) {
+        strideDao.deleteEntriesForMonth(month)
+    }
+
+
     fun getAllEntries(): Flow<List<PlannerEntry>> {
         return strideDao.getAllEntries()
     }

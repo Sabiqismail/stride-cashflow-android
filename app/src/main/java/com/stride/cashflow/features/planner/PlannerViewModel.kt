@@ -6,14 +6,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.stride.cashflow.data.PlannerEntry
 import com.stride.cashflow.data.StrideRepository
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-
-// Define inflow categories as per your design
 val INFLOW_CATEGORIES = listOf("Income", "Receivables")
 
 class PlannerViewModel(
@@ -21,114 +16,154 @@ class PlannerViewModel(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    // Get the month from the navigation arguments
     private val month: String = savedStateHandle.get<String>("month")!!
 
-    // This is the main state for the UI. It combines templates and entries.
+    // This local-only flow holds the state during "create" mode before saving.
+    private val _localCreateState = MutableStateFlow<List<UiPlannerItem>>(emptyList())
+
     val uiState: StateFlow<PlannerUiState> = combine(
         repository.getAllTemplates(),
-        repository.getEntriesForMonth(month)
-    ) { templates, entries ->
-        val uiPlannerItems = templates.map { template ->
-            // Find the corresponding entry for this template, or create a default one with 0L
-            val entry = entries.find { it.templateId == template.id }
-                ?: PlannerEntry(templateId = template.id, plannerMonth = month, amount = 0L)
+        repository.getEntriesForMonth(month),
+        _localCreateState    ) { templates, entriesFromDb, localState ->
 
-            UiPlannerItem(
-                entryId = entry.id,
-                templateId = template.id,
-                name = template.name,
-                category = template.category,
-                amount = entry.amount,
-                isDone = entry.isDone
-            )
+        // If templates haven't loaded, return a loading state.
+        if (templates.isEmpty()) {
+            return@combine PlannerUiState(isLoading = true)
         }
 
-        // Calculate totals using Long
+        val isCreateMode = entriesFromDb.isEmpty()
+        val uiPlannerItems: List<UiPlannerItem>
+
+        if (isCreateMode) {
+            // --- IN CREATE MODE ---
+            // If our local state is empty, initialize it from templates.
+            if (localState.isEmpty()) {_localCreateState.value = templates.map { template ->
+                UiPlannerItem(
+                    entryId = 0,
+                    templateId = template.id,
+                    name = template.name,
+                    category = template.category,
+                    amount = 0L,
+                    isDone = false
+                )
+            }
+                // Return a temporary loading state while the local state is populated for the first time
+                return@combine PlannerUiState(isLoading = true)
+            }
+            // Use the local state as the source of truth.
+            uiPlannerItems = localState
+        } else {
+            // --- IN EDIT MODE ---
+            // Show only saved items from the database.
+            uiPlannerItems = entriesFromDb.mapNotNull { entry ->
+                templates.find { it.id == entry.templateId }?.let { template ->
+                    UiPlannerItem(                        entryId = entry.id,
+                        templateId = template.id,
+                        name = template.name,
+                        category = template.category,
+                        amount = entry.amount,
+                        isDone = entry.isDone
+                    )
+                }
+            }
+        }
+
         val totalInflows = uiPlannerItems
             .filter { it.category in INFLOW_CATEGORIES }
-            .sumOf { it.amount } // sumOf works directly with Long in recent Kotlin versions
+            .sumOf { it.amount }
 
         val totalOutflows = uiPlannerItems
             .filterNot { it.category in INFLOW_CATEGORIES }
             .sumOf { it.amount }
 
-
-
         PlannerUiState(
+            isLoading = false,
             plannerItems = uiPlannerItems,
             totalInflows = totalInflows,
-            totalOutflows = totalOutflows,
-            netBalance = totalInflows - totalOutflows
+            totalOutflows = totalOutflows,netBalance = totalInflows - totalOutflows
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = PlannerUiState() // Start with an empty state
+        initialValue = PlannerUiState(isLoading = true)
     )
 
-    fun updateAmount(templateId: Int, newAmount: Long) { // Updated parameter to Long
-        viewModelScope.launch {
-            val currentItem = uiState.value.plannerItems.find { it.templateId == templateId }
-            val entry = PlannerEntry(
-                id = currentItem?.entryId ?: 0,
-                plannerMonth = month,
-                templateId = templateId,
-                amount = newAmount, // Amount is now a Long
-                isDone = currentItem?.isDone ?: false
-            )
-            repository.upsertEntry(entry)
-        }
-    }
+    fun updateAmount(templateId: Int, newAmount: Long) {
+        val isCreateMode = uiState.value.plannerItems.any { it.entryId == 0 }
 
-    fun toggleDoneStatus(item: UiPlannerItem) {
+        if (isCreateMode) {
+            // In create mode, just update the local state. DO NOT write to DB.
+            _localCreateState.update { currentList ->
+                currentList.map { item ->
+                    if (item.templateId == templateId) {
+                        item.copy(amount = newAmount)
+                    } else {
+                        item
+                    }
+                }
+            }
+        } else {            // In edit mode, write to the database as before.
+            viewModelScope.launch {
+                val currentItem = uiState.value.plannerItems.find { it.templateId == templateId }
+                val entry = PlannerEntry(
+                    id = currentItem?.entryId ?:0,
+                    plannerMonth = month,
+                    templateId = templateId,
+                    amount = newAmount,
+                    isDone = currentItem?.isDone ?: false
+                )
+                repository.upsertEntry(entry)
+            }
+        }
+    }    fun toggleDoneStatus(item: UiPlannerItem) {
+        // This can only happen in edit mode, so the original logic is fine.
         viewModelScope.launch {
             val updatedEntry = PlannerEntry(
                 id = item.entryId,
                 plannerMonth = month,
                 templateId = item.templateId,
                 amount = item.amount,
-                isDone = !item.isDone // Flip the status
+                isDone = !item.isDone
             )
             repository.upsertEntry(updatedEntry)
         }
     }
 
     fun saveNewPlanner() {
+        // Now, we read from the local state to save the planner.
         viewModelScope.launch {
-            // Filter out any items where the user did not enter an amount
-            val entriesToSave = uiState.value.plannerItems
+            val entriesToSave = _localCreateState.value
                 .filter { it.amount > 0L }
                 .map { uiItem ->
-                    PlannerEntry(
-                        id = 0, // Always a new entry, so id is 0
+                    PlannerEntry(                        id = 0,
                         plannerMonth = month,
                         templateId = uiItem.templateId,
                         amount = uiItem.amount,
                         isDone = uiItem.isDone
                     )
                 }
-
-            // Call the repository to save these new entries
             repository.createPlannerForMonth(entriesToSave)
+        }
+    }
+
+    fun deletePlanner() {
+        viewModelScope.launch {
+            repository.deletePlannerForMonth(month)
         }
     }
 }
 
-// Data class to hold the entire screen state, now using Long
 data class PlannerUiState(
+    val isLoading: Boolean = true,
     val plannerItems: List<UiPlannerItem> = emptyList(),
     val totalInflows: Long = 0L,
     val totalOutflows: Long = 0L,
     val netBalance: Long = 0L
 )
 
-// Factory for creating the PlannerViewModel
 class PlannerViewModelFactory(private val repository: StrideRepository) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        // This factory is a bit limited as it can't handle SavedStateHandle directly
-        // For a full implementation, we'd use Hilt or a custom provider.
-        // This is a simplification for our current setup.
         error("Cannot create an instance of $modelClass")
     }
 }
+

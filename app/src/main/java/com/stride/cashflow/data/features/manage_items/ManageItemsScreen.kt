@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.stride.cashflow.data.ItemTemplate
 
 // The fixed categories from your plan
-val categories = listOf("Income", "Receivables", "Fixed Expenses", "Loans & EMI", "Credit Cards", "Personal Debt")
+val categories = listOf("Income", "Receivables", "Fixed Expenses", "Variable Expenses", "Loans & EMI", "Credit Cards", "Personal Debt")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
