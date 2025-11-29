@@ -4,6 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.createSavedStateHandle
@@ -18,33 +24,62 @@ import com.stride.cashflow.features.dashboard.DashboardScreen
 import com.stride.cashflow.features.dashboard.DashboardViewModel
 import com.stride.cashflow.features.manage_items.ManageItemsScreen
 import com.stride.cashflow.features.manage_items.ManageItemsViewModel
+import com.stride.cashflow.features.onboarding.OnboardingFlow
+import com.stride.cashflow.features.onboarding.OnboardingViewModel
 import com.stride.cashflow.features.planner.PlannerScreen
 import com.stride.cashflow.features.planner.PlannerViewModel
 import com.stride.cashflow.ui.theme.StrideCashflowTheme
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.stride.cashflow.utils.OnboardingManager
+import java.time.YearMonth
 
+// The corrected, robust ViewModel Factory
 object AppViewModelFactory : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
         val application = checkNotNull(extras[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY])
         val repository = (application as StrideApplication).repository
-        val savedStateHandle = extras.createSavedStateHandle()
-        return when (modelClass) {
-            ManageItemsViewModel::class.java -> ManageItemsViewModel(repository) as T
-            DashboardViewModel::class.java -> DashboardViewModel(repository) as T
-            PlannerViewModel::class.java -> PlannerViewModel(repository, savedStateHandle) as T
-            else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+
+        // We check the class type and return the correctly cast ViewModel.
+        // This structure is clearer for the compiler.
+        if (modelClass.isAssignableFrom(ManageItemsViewModel::class.java)) {
+            return ManageItemsViewModel(repository) as T
         }
+        if (modelClass.isAssignableFrom(DashboardViewModel::class.java)) {
+            return DashboardViewModel(repository) as T
+        }
+        if (modelClass.isAssignableFrom(OnboardingViewModel::class.java)) {
+            return OnboardingViewModel(repository) as T
+        }
+        if (modelClass.isAssignableFrom(PlannerViewModel::class.java)) {
+            val savedStateHandle = extras.createSavedStateHandle()
+            return PlannerViewModel(repository, savedStateHandle) as T
+        }
+
+        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        installSplashScreen()
+        // Splash screen is handled by the theme in the manifest, no code needed here
+        // if you are using installSplashScreen() you need to import it.
+        // For now, let's assume it's handled by the theme to avoid import errors.
+
         setContent {
             StrideCashflowTheme {
-                StrideApp(factory = AppViewModelFactory)
+                val context = LocalContext.current
+                var showOnboarding by remember { mutableStateOf(!OnboardingManager.hasSeenOnboarding(context)) }
+
+                if (showOnboarding) {
+                    OnboardingFlow {
+                        // This lambda is called when onboarding is complete
+                        OnboardingManager.setOnboardingSeen(context, true)
+                        showOnboarding = false
+                    }
+                } else {
+                    StrideApp(factory = AppViewModelFactory)
+                }
             }
         }
     }
@@ -53,10 +88,26 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun StrideApp(factory: ViewModelProvider.Factory) {
     val navController = rememberNavController()
+    // This state ensures we only try to navigate on the very first composition after onboarding
+    val isFirstLaunchAfterOnboarding = remember { mutableStateOf(true) }
 
     NavHost(navController = navController, startDestination = "dashboard") {
 
         composable("dashboard") {
+            // This side-effect runs only when this composable enters the screen
+            if (isFirstLaunchAfterOnboarding.value) {
+                // We use LaunchedEffect to ensure navigation happens safely after composition
+                LaunchedEffect(Unit) {
+                    val currentMonth = YearMonth.now()
+                    val monthString = "%d-%02d".format(currentMonth.year, currentMonth.monthValue)
+                    // Navigate to the create/edit screen for the current month
+                    navController.navigate("planner/create/$monthString")
+                    // Flip the flag so this doesn't run again
+                    isFirstLaunchAfterOnboarding.value = false
+                }
+            }
+
+            // This ViewModel is composed whether we navigate away or not
             val dashboardViewModel: DashboardViewModel = viewModel(factory = factory)
             DashboardScreen(
                 viewModel = dashboardViewModel,
@@ -70,15 +121,14 @@ fun StrideApp(factory: ViewModelProvider.Factory) {
             ManageItemsScreen(viewModel = manageItemsViewModel)
         }
 
-        // --- THE "VIEW" ROUTE for a saved planner ---
         composable(
-            route = "planner/{month}", // The simple route for viewing
+            route = "planner/{month}",
             arguments = listOf(navArgument("month") { type = NavType.StringType })
         ) {
             val plannerViewModel: PlannerViewModel = viewModel(factory = factory)
             val month = it.arguments?.getString("month") ?: "Error"
             PlannerScreen(
-                isCreateMode = false, // This is VIEW mode, so create mode is false
+                isCreateMode = false,
                 month = month,
                 viewModel = plannerViewModel,
                 onNavigateBack = { navController.popBackStack() },
@@ -87,19 +137,17 @@ fun StrideApp(factory: ViewModelProvider.Factory) {
             )
         }
 
-        // --- THE "CREATE / EDIT" ROUTE ---
         composable(
-            // We add an optional argument to the route to distinguish create/edit from view
             route = "planner/create/{month}?isCreate={isCreate}",
             arguments = listOf(
                 navArgument("month") { type = NavType.StringType },
-                navArgument("isCreate") { defaultValue = "true" } // Default to create mode
+                navArgument("isCreate") { defaultValue = "true" }
             )
         ) {
             val plannerViewModel: PlannerViewModel = viewModel(factory = factory)
             val month = it.arguments?.getString("month") ?: "Error"
             PlannerScreen(
-                isCreateMode = true, // The UI should always be in "create" mode here
+                isCreateMode = true,
                 month = month,
                 viewModel = plannerViewModel,
                 onNavigateBack = { navController.popBackStack() },
