@@ -1,11 +1,16 @@
 package com.stride.cashflow.features.dashboard
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+// --- THE FIX IS HERE ---
+// We are reverting to the 100% reliable, default 'Settings' (gear) icon to solve the build error.
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.stride.cashflow.ui.theme.SageGreen
 import com.stride.cashflow.ui.theme.Terracotta
 import com.stride.cashflow.utils.formatMonthString
@@ -27,40 +33,13 @@ import java.time.YearMonth
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel,
-    onNavigateToManageItems: () -> Unit,
     onNavigateToPlanner: (String) -> Unit
 ) {
-    // We now observe the new dashboardState
     val dashboardState by viewModel.dashboardState.collectAsState()
-    var showDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Your Planners") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                actions = {
-                    IconButton(onClick = onNavigateToManageItems) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Setup Your Cashflows")
-                    }
-                }
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add New Planner")
-            }
-        }
     ) { paddingValues ->
         if (dashboardState.isEmpty()) {
-            // Use the new, cleaner EmptyDashboard composable
             EmptyDashboard(modifier = Modifier.padding(paddingValues))
         } else {
             LazyColumn(
@@ -70,11 +49,9 @@ fun DashboardScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // The list now iterates over the new DashboardPlannerCardData
                 items(dashboardState, key = { it.monthString }) { cardData ->
                     PlannerMonthCard(
                         cardData = cardData,
-                        // Navigate to the specific planner for editing
                         onClick = { onNavigateToPlanner("planner/${cardData.monthString}") }
                     )
                 }
@@ -82,20 +59,9 @@ fun DashboardScreen(
         }
     }
 
-    if (showDialog) {
-        MonthYearPickerDialog(
-            onDismiss = { showDialog = false },
-            onConfirm = { month, year ->
-                val monthString = "%d-%02d".format(year, month)
-                // Navigate to the create screen
-                onNavigateToPlanner("planner/create/$monthString")
-                showDialog = false
-            }
-        )
-    }
+
 }
 
-// A new composable for the empty state to keep the main screen clean
 @Composable
 fun EmptyDashboard(modifier: Modifier = Modifier) {
     Column(
@@ -117,88 +83,102 @@ fun EmptyDashboard(modifier: Modifier = Modifier) {
     }
 }
 
-// The new, redesigned card that shows the Net Balance
 @Composable
 fun PlannerMonthCard(cardData: DashboardPlannerCardData, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
             .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        // The Row and second Text composable have been removed for a simpler look.
         Text(
             text = formatMonthString(cardData.monthString),
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp), // Apply padding directly here
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
     }
 }
 
-
-
-// The MonthYearPickerDialog composable remains unchanged
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
-fun MonthYearPickerDialog(onDismiss: () -> Unit, onConfirm: (Int, Int) -> Unit) {
-    val currentYear = YearMonth.now().year
-    val currentMonth = YearMonth.now().monthValue
-    var selectedYear by remember { mutableStateOf(currentYear) }
-    var selectedMonth by remember { mutableStateOf(currentMonth) }
-    var yearExpanded by remember { mutableStateOf(false) }
-    var monthExpanded by remember { mutableStateOf(false) }
-    val years = (currentYear - 5..currentYear + 5).toList()
-    val months = Month.values().map { it.value to it.name.lowercase().replaceFirstChar { char -> char.uppercase() } }
+fun MonthSliderDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (Int, Int) -> Unit
+) {
+    val currentYearMonth = YearMonth.now()
+    var displayedYearMonth by remember { mutableStateOf(currentYearMonth) }
+    var slideDirection by remember { mutableStateOf(1) }
+    val monthName = displayedYearMonth.month.name.lowercase().replaceFirstChar { it.uppercase() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Create New Planner") },
+        title = { Text("Create New Planner", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
         text = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ExposedDropdownMenuBox(expanded = monthExpanded, onExpandedChange = { monthExpanded = !monthExpanded }) {
-                    TextField(
-                        readOnly = true,
-                        value = months.first { it.first == selectedMonth }.second,
-                        onValueChange = {},
-                        label = { Text("Month") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = monthExpanded) },
-                        modifier = Modifier.menuAnchor()
-                    )
-                    ExposedDropdownMenu(expanded = monthExpanded, onDismissRequest = { monthExpanded = false }) {
-                        months.forEach { (monthValue, monthName) ->
-                            DropdownMenuItem(text = { Text(monthName) }, onClick = {
-                                selectedMonth = monthValue
-                                monthExpanded = false
-                            })
-                        }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = displayedYearMonth.year.toString(),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = {
+                        slideDirection = -1
+                        displayedYearMonth = displayedYearMonth.minusMonths(1)
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous Month")
                     }
-                }
-                ExposedDropdownMenuBox(expanded = yearExpanded, onExpandedChange = { yearExpanded = !yearExpanded }) {
-                    TextField(
-                        readOnly = true,
-                        value = selectedYear.toString(),
-                        onValueChange = {},
-                        label = { Text("Year") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = yearExpanded) },
-                        modifier = Modifier.menuAnchor()
-                    )
-                    ExposedDropdownMenu(expanded = yearExpanded, onDismissRequest = { yearExpanded = false }) {
-                        years.forEach { year ->
-                            DropdownMenuItem(text = { Text(year.toString()) }, onClick = {
-                                selectedYear = year
-                                yearExpanded = false
-                            })
+
+                    AnimatedContent(
+                        targetState = monthName,
+                        transitionSpec = {
+                            val enterTransition = if (slideDirection > 0)
+                                slideInHorizontally { height -> height } + fadeIn()
+                            else
+                                slideInHorizontally { height -> -height } + fadeIn()
+
+                            val exitTransition = if (slideDirection > 0)
+                                slideOutHorizontally { height -> -height } + fadeOut()
+                            else
+                                slideOutHorizontally { height -> height } + fadeOut()
+
+                            enterTransition togetherWith exitTransition
                         }
+                    ) { targetMonth ->
+                        Text(
+                            text = targetMonth,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Light,
+                            fontSize = 28.sp,
+                            modifier = Modifier.width(140.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    IconButton(onClick = {
+                        slideDirection = 1
+                        displayedYearMonth = displayedYearMonth.plusMonths(1)
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next Month")
                     }
                 }
             }
         },
-        confirmButton = { Button(onClick = { onConfirm(selectedMonth, selectedYear) }) { Text("Create") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(displayedYearMonth.monthValue, displayedYearMonth.year) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Create")
+            }
+        },
+        dismissButton = {
+            // No explicit dismiss button to keep the UI clean
+        }
     )
 }

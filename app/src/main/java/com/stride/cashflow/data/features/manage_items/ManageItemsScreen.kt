@@ -30,15 +30,7 @@ fun ManageItemsScreen(viewModel: ManageItemsViewModel) {
     var showDialogForCategory by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Setup Your Cashflows") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        }
+
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
