@@ -73,10 +73,14 @@ fun StrideApp(factory: ViewModelProvider.Factory) {
     val navController = rememberNavController()
     var showAddPlannerDialog by remember { mutableStateOf(false) }
 
+    // --- FIX STEP 1: Get the current navigation state ---
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    // --- FIX STEP 2: Get the current screen's route name (e.g., "dashboard") ---
+    val currentRoute = navBackStackEntry?.destination?.route
+
     Scaffold(
         bottomBar = {
             BottomAppBar {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
                 val items = listOf(BottomNavItem.Home, BottomNavItem.Flows)
 
@@ -99,11 +103,15 @@ fun StrideApp(factory: ViewModelProvider.Factory) {
             }
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddPlannerDialog = true },
-                shape = CircleShape
-            ) {
-                Icon(Icons.Filled.Add, "Add New Planner")
+            // --- FIX STEP 3: Add this 'if' condition ---
+            // This will only show the FAB if the current route is "dashboard".
+            if (currentRoute == "dashboard") {
+                FloatingActionButton(
+                    onClick = { showAddPlannerDialog = true },
+                    shape = CircleShape
+                ) {
+                    Icon(Icons.Filled.Add, "Add New Planner")
+                }
             }
         },
         floatingActionButtonPosition = FabPosition.Center,
@@ -136,6 +144,7 @@ fun AppNavHost(navController: NavHostController, factory: ViewModelProvider.Fact
             )
         }
 
+        // Your ManageItemsScreen uses the route "manage_items"
         composable("manage_items") {
             val manageItemsViewModel: ManageItemsViewModel = viewModel(factory = factory)
             ManageItemsScreen(viewModel = manageItemsViewModel)
